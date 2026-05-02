@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shutdown-demo
+  labels:
+    app: shutdown-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shutdown-demo
+  template:
+    metadata:
+      labels:
+        app: shutdown-demo
+    spec:
+      # Total time k8s will wait between SIGTERM and SIGKILL.
+      # Must be > shutdown.WithBudget in main.go (25s) so we exit clean
+      # before the kernel is involved.
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: app
+          image: shutdown-demo:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+
+          # /readyz is what kubelet polls for "ready to receive traffic".
+          # The PreShutdown phase flips this to 503 so the load balancer
+          # drains us before the listener closes.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            periodSeconds: 2
+            failureThreshold: 1
+
+          # /healthz is "process alive at all" — restart-on-failure only.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 3
+            initialDelaySeconds: 5
+
+          # NOTE: no `lifecycle.preStop` block.
+          # ubgo/shutdown's PhasePreShutdown handler flips /readyz on
+          # SIGTERM, so the load balancer drains *during* shutdown rather
+          # than before it. If you want extra propagation time before the
+          # process even gets SIGTERM, add a preStop sleep here — but
+          # then the runtime image needs /bin/sh (distroless doesn't),
+          # so swap the Dockerfile FROM line for alpine:3.20.
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shutdown-demo
+spec:
+  selector:
+    app: shutdown-demo
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

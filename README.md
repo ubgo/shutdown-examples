@@ -18,6 +18,7 @@
 | 07 | [`07-with-prom`](./07-with-prom) | Export Prometheus metrics via `shutdown-prom`. |
 | 08 | [`08-http-nethttp`](./08-http-nethttp) | Graceful shutdown of a stdlib `*http.Server`. |
 | 09 | [`09-http-gin`](./09-http-gin) | Graceful shutdown of a Gin engine wrapped in `*http.Server`. |
+| 10 | [`10-k8s-prestop`](./10-k8s-prestop) | Full Kubernetes drain demo. Spins up `kind`, deploys, kills the pod, and shows the four phases firing in order — bounded by `terminationGracePeriodSeconds`. |
 
 ## Running
 

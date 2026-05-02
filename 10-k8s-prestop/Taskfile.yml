@@ -1,0 +1,101 @@
+version: "3"
+
+# k8s preStop demo for ubgo/shutdown.
+#
+# `task demo` runs the full end-to-end loop:
+#   1. Spin up a kind cluster (if missing)
+#   2. Build the Docker image and load it into the cluster
+#   3. Deploy
+#   4. Port-forward, hit /readyz + / to confirm working
+#   5. Delete the pod (triggers SIGTERM)
+#   6. Tail the logs so you can watch phase ordering
+#   7. Clean up
+#
+# Prereqs: docker, kubectl, kind, task. Install kind via `brew install kind`.
+
+vars:
+  CLUSTER: shutdown-demo
+  IMAGE: shutdown-demo:dev
+  NAMESPACE: default
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds: [task --list]
+
+  build:
+    desc: Build the Docker image locally
+    cmds:
+      - docker build -t {{.IMAGE}} .
+    sources:
+      - main.go
+      - go.mod
+      - go.sum
+      - Dockerfile
+
+  cluster:up:
+    desc: Create the kind cluster (idempotent)
+    cmds:
+      - |
+        if ! kind get clusters 2>/dev/null | grep -q '^{{.CLUSTER}}$'; then
+          kind create cluster --name {{.CLUSTER}}
+        else
+          echo "cluster '{{.CLUSTER}}' already exists"
+        fi
+      - kubectl config use-context kind-{{.CLUSTER}}
+      - kubectl wait --for=condition=Ready node --all --timeout=60s
+
+  cluster:down:
+    desc: Delete the kind cluster
+    cmds:
+      - kind delete cluster --name {{.CLUSTER}}
+
+  load:
+    desc: Load the image into the kind cluster
+    deps: [build, cluster:up]
+    cmds:
+      - kind load docker-image {{.IMAGE}} --name {{.CLUSTER}}
+
+  deploy:
+    desc: Apply the Deployment + Service
+    deps: [load]
+    cmds:
+      - kubectl apply -f deployment.yaml
+      - kubectl rollout status deploy/shutdown-demo --timeout=60s
+
+  logs:
+    desc: Tail logs from the shutdown-demo pod
+    cmds:
+      - kubectl logs -f deploy/shutdown-demo
+
+  smoke:
+    desc: Hit /readyz once to confirm the service answers
+    cmds:
+      - kubectl wait --for=condition=Ready pod -l app=shutdown-demo --timeout=30s
+      - |
+        kubectl run -i --rm --restart=Never curlpod \
+          --image=curlimages/curl:8.10.1 \
+          --command -- curl -s -o /dev/null -w "ready=%{http_code}\n" \
+          http://shutdown-demo.{{.NAMESPACE}}.svc.cluster.local/readyz
+
+  trigger:
+    desc: Delete the pod to trigger SIGTERM and observe shutdown phases
+    cmds:
+      - kubectl delete pod -l app=shutdown-demo --grace-period=30 --wait=false
+      - echo "pod marked for deletion; tailing logs (Ctrl-C to stop)..."
+      - kubectl logs -f -l app=shutdown-demo --tail=100 || true
+
+  demo:
+    desc: Full end-to-end demo (cluster up → build → deploy → smoke → trigger)
+    cmds:
+      - task: cluster:up
+      - task: deploy
+      - task: smoke
+      - task: trigger
+
+  clean:
+    desc: Tear down everything (cluster + local image)
+    cmds:
+      - kubectl delete -f deployment.yaml --ignore-not-found
+      - task: cluster:down
+      - docker image rm {{.IMAGE}} 2>/dev/null || true
