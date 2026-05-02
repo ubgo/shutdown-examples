@@ -64,6 +64,99 @@ The shutdown library's job is to:
 2. Aggregate its error with anything else shutting down at the same time.
 3. Hard-exit via the watchdog if gocron itself stalls past `WithBudget`.
 
+## Real-world: long-running jobs (24h drain budget)
+
+The example above uses tiny timeouts so it's quick to demo. A production
+cron service usually wants the opposite: **finish whatever job is running,
+no matter how long it takes** — bounded only by a wall-clock ceiling that
+prevents zombie processes.
+
+A common shape (matching the original `lace/shutdown` setup people are
+migrating from):
+
+```go
+scheduler, err := gocron.NewScheduler(
+    gocron.WithLogger(gocronlogger.New(gozap.GetLogger())),
+    gocron.WithMonitor(gocronmonitor.New(gozap.GetLogger())),
+    gocron.WithStopTimeout(24 * time.Hour), // wait up to 24h for in-flight jobs
+)
+
+mgr := shutdown.New(
+    // 25h budget = StopTimeout + 1h headroom. The watchdog only fires
+    // if gocron itself hangs past its own 24h declared deadline.
+    shutdown.WithBudget(25 * time.Hour),
+    shutdown.WithLogger(shutdown.SlogLogger(nil)),
+    shutdown.WithExitOnComplete(0, 1),
+)
+
+// Optional: emit a structured log line on every phase boundary via zap.
+mgr.Subscribe(shutdownzap.Observer(gozap.GetLogger()))
+
+// Phase 1: HTTP UI stops accepting (if you serve gocron-ui dashboard).
+if httpSrv != nil {
+    _ = shutdownnethttp.Register(mgr, httpSrv)
+}
+
+// Phase 2: drain — wait up to 24h for the current job to finish.
+_ = mgr.Register("scheduler-stop-jobs", func(_ context.Context) error {
+    return scheduler.StopJobs()
+},
+    shutdown.WithPhase(shutdown.PhaseDrainTraffic),
+    shutdown.WithTimeout(24*time.Hour + 30*time.Minute), // > gocron's StopTimeout
+)
+
+// Phase 3: scheduler resource teardown.
+_ = mgr.Register("scheduler-shutdown", func(_ context.Context) error {
+    return scheduler.Shutdown()
+},
+    shutdown.WithPhase(shutdown.PhaseCloseClients),
+    shutdown.WithTimeout(30*time.Second),
+)
+
+if err := mgr.Listen(context.Background()); err != nil {
+    gozap.GetLogger().Error("shutdown errors", zap.Error(err))
+}
+```
+
+### Why those exact numbers?
+
+The three timeouts form a cascade — each layer must outlive the one below
+it so a clean drain isn't killed prematurely:
+
+```
+gocron.WithStopTimeout              24h        (gocron's own deadline)
+  < per-handler WithTimeout         24h 30m    (manager gives gocron headroom)
+    < WithBudget                    25h        (watchdog last-resort)
+```
+
+If you reverse the order you get bugs:
+
+| Mistake | What happens |
+|---------|--------------|
+| `WithBudget(20h)` (less than StopTimeout) | Watchdog hard-exits at T+20h, killing an in-flight job that gocron was still patiently waiting on. Process exits with the watchdog's failure code; orchestrator treats it as a crash. |
+| `WithTimeout(20h)` (less than StopTimeout) | Manager cancels the per-handler context at T+20h. `StopJobs` returns ctx.Err. The job goroutine keeps running but no one is waiting; result depends on whether the job respects ctx. |
+| `WithBudget(0)` (no budget) | Watchdog disabled. If gocron hangs (driver bug, deadlocked job), only `kill -9` will stop the process. |
+
+### "Forever" budget
+
+If you really want the process to wait as long as it takes — no
+watchdog, no upper bound — set:
+
+```go
+shutdown.WithBudget(0)              // disables the manager-level deadline
+shutdown.WithWatchdogGrace(0)       // disables the watchdog (also)
+```
+
+You then rely entirely on the orchestrator (k8s `terminationGracePeriodSeconds`,
+systemd `TimeoutStopSec`) to be the safety net. That's a reasonable
+default for batch jobs that *must not* be interrupted, but means your
+ops tooling has to know the right limit instead of the binary itself.
+
+### Without an HTTP UI
+
+If your cron service has no `gocron-ui` dashboard, drop the `shutdownnethttp.Register`
+line — there's no listener to close. Phases 2 and 3 are all you need.
+
 ## Migration from `lace/shutdown`
 
 If you have an existing service using `lace/shutdown` with a single
