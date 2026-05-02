@@ -1,0 +1,63 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.example }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - 01-basic
+          - 02-phases
+          - 03-actor
+          - 04-watchdog
+          - 05-with-zap
+          - 06-with-otel
+          - 07-with-prom
+          - 08-http-nethttp
+          - 09-http-gin
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+      - run: cd ${{ matrix.example }} && go build ./...
+      - run: cd ${{ matrix.example }} && go vet ./...
+
+  smoke:
+    name: smoke (${{ matrix.example }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - 01-basic
+          - 02-phases
+          - 03-actor
+          - 05-with-zap
+          - 06-with-otel
+          - 07-with-prom
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+      - run: cd ${{ matrix.example }} && go mod download && go build -o /tmp/example .
+      - run: |
+          set +e
+          cd ${{ matrix.example }}
+          timeout 5s /tmp/example > out.txt 2>&1
+          c=$?
+          if [ "$c" -ne 0 ] && [ "$c" -ne 124 ]; then
+            cat out.txt; exit 1
+          fi
+          cat out.txt | head -20

@@ -1,0 +1,4 @@
+github.com/ubgo/shutdown v0.2.0 h1:nBnN57aTMbJwv4RhH2BdeiDJNcHMdkBz+npxnC7gSTo=
+github.com/ubgo/shutdown v0.2.0/go.mod h1:8aQb1xNlwltR5/QoZdliTpQV0c1CT8KyjqN/eHndla8=
+github.com/ubgo/shutdown/contrib/shutdown-nethttp v0.1.0 h1:3nG2gMVQllwuWA/0PNZfKXW92aB/bmH6tZE1ROiSwCA=
+github.com/ubgo/shutdown/contrib/shutdown-nethttp v0.1.0/go.mod h1:p7gHaFesI6QvFw7pyUVSIZ5WReg4J7T07+L5Hg3qFbg=
