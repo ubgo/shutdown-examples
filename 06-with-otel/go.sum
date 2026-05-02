@@ -15,8 +15,8 @@ github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsT
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/ubgo/shutdown v0.2.0 h1:nBnN57aTMbJwv4RhH2BdeiDJNcHMdkBz+npxnC7gSTo=
 github.com/ubgo/shutdown v0.2.0/go.mod h1:8aQb1xNlwltR5/QoZdliTpQV0c1CT8KyjqN/eHndla8=
-github.com/ubgo/shutdown/contrib/shutdown-otel v0.1.0 h1:mqDmzDqyXqu4qdztkxqIhO6q0fudlsdTe+kEIlXQoec=
-github.com/ubgo/shutdown/contrib/shutdown-otel v0.1.0/go.mod h1:m2SGqvdofx7o50mpbdmaFl9yy5kIrl4ntLV0fXdYhFs=
+github.com/ubgo/shutdown/contrib/shutdown-otel v0.1.1 h1:4KmGLG64+o+s4gP9O37C6vwHzVEgzxtB1QQScPb2zgY=
+github.com/ubgo/shutdown/contrib/shutdown-otel v0.1.1/go.mod h1:m2SGqvdofx7o50mpbdmaFl9yy5kIrl4ntLV0fXdYhFs=
 go.opentelemetry.io/otel v1.32.0 h1:WnBN+Xjcteh0zdk01SVqV55d/m62NJLJdIyb4y/WO5U=
 go.opentelemetry.io/otel v1.32.0/go.mod h1:00DCVSB0RQcnzlwyTfqtxSm+DRr9hpYrHjNGiBHVQIg=
 go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.32.0 h1:cC2yDI3IQd0Udsux7Qmq8ToKAx1XCilTQECZ0KDZyTw=

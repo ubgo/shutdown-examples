@@ -4,7 +4,7 @@ go 1.24
 
 require (
 	github.com/ubgo/shutdown v0.2.0
-	github.com/ubgo/shutdown/contrib/shutdown-otel v0.1.0
+	github.com/ubgo/shutdown/contrib/shutdown-otel v0.1.1
 	go.opentelemetry.io/otel v1.32.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.32.0
 	go.opentelemetry.io/otel/sdk v1.32.0
